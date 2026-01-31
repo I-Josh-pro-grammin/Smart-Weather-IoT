@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart-IoT Dash</title>
+
+    <!-- Google Fonts: Outfit for a modern feel -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+
+    <!-- Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.1/moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.0.0/dist/chartjs-adapter-moment.min.js"></script>
+    <script
+        src="https://cdn.jsdelivr.net/npm/chartjs-plugin-streaming@2.0.0/dist/chartjs-plugin-streaming.min.js"></script>
+
+    <style>
+        :root {
+            --primary: #0ea5e9;
+            --secondary: #6366f1;
+            --bg-dark: #020617;
+            --glass: rgba(15, 23, 42, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --text-main: #f8fafc;
+            --text-dim: #94a3b8;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            background-image: url('file:///C:/Users/JOSH/.gemini/antigravity/brain/6c3cc7bb-8632-4c63-ae5c-72d25418d229/dashboard_bg_1769871846136.png');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        /* Overlay for better readability */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at 50% 50%, rgba(2, 6, 23, 0.4) 0%, rgba(2, 6, 23, 0.8) 100%);
+            z-index: -1;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .logo-area {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-area i {
+            font-size: 2rem;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .logo-area h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .status-pill {
+            background: var(--glass);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            padding: 8px 16px;
+            border-radius: 99px;
+            border: 1px solid var(--glass-border);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #64748b;
+        }
+
+        .connected .status-dot {
+            background: var(--success);
+            box-shadow: 0 0 12px var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            50% {
+                transform: scale(1.5);
+                opacity: 0.5;
+            }
+
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        /* Main Grid */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .glass-card {
+            background: var(--glass);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 1.5rem;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .glass-card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .card-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-dim);
+            margin-bottom: 1.5rem;
+        }
+
+        .metric-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .value-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .main-value {
+            font-size: 3.5rem;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .unit {
+            font-size: 1.25rem;
+            color: var(--text-dim);
+            font-weight: 400;
+            margin-left: 4px;
+        }
+
+        .update-ts {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            margin-top: 0.5rem;
+        }
+
+        /* Progress Circle for Metrics */
+        .circle-svg {
+            width: 80px;
+            height: 80px;
+            transform: rotate(-90deg);
+        }
+
+        .circle-bg {
+            fill: none;
+            stroke: rgba(255, 255, 255, 0.05);
+            stroke-width: 6;
+        }
+
+        .circle-progress {
+            fill: none;
+            stroke-width: 6;
+            stroke-linecap: round;
+            stroke-dasharray: 226;
+            stroke-dashoffset: 226;
+            transition: stroke-dashoffset 1s ease-out;
+        }
+
+        /* Control Buttons */
+        .controls {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .btn-toggle {
+            flex: 1;
+            padding: 1rem;
+            border-radius: 16px;
+            border: 1px solid var(--glass-border);
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--text-main);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-toggle i {
+            font-size: 1.5rem;
+        }
+
+        .btn-toggle.active-on {
+            background: var(--success);
+            color: white;
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+        }
+
+        .btn-toggle.active-off {
+            background: var(--danger);
+            color: white;
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+        }
+
+        .btn-toggle:hover:not(.active-on):not(.active-off) {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Chart Card */
+        .full-width {
+            grid-column: 1 / -1;
+        }
+
+        .chart-container {
+            height: 300px;
+            width: 100%;
+            margin-top: 1rem;
+        }
+
+        /* Notifications */
+        .toast {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: var(--glass);
+            backdrop-filter: blur(20px);
+            padding: 12px 24px;
+            border-radius: 12px;
+            border: 1px solid var(--glass-border);
+            display: none;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @media (max-width: 640px) {
+            body {
+                padding: 1rem;
+            }
+
+            .main-value {
+                font-size: 2.5rem;
+            }
+
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <div class="logo-area">
+            <i class="bi bi-cpu"></i>
+            <div>
+                <h1>Smart-IoT Dashboard</h1>
+                <p style="font-size: 0.7rem; color: var(--text-dim);">ESP8266 Live Monitor</p>
+            </div>
+        </div>
+        <div id="status-pill" class="status-pill">
+            <div class="status-dot"></div>
+            <span id="conn-text">Establishing Connection...</span>
+        </div>
+    </header>
+
+    <main class="dashboard-grid">
+        <!-- Temp Card -->
+        <div class="glass-card">
+            <div class="card-label">
+                <i class="bi bi-thermometer-half" style="color: var(--warning);"></i>
+                TEMPERATURE
+            </div>
+            <div class="metric-content">
+                <div class="value-group">
+                    <div class="main-value"><span id="temp-val">--</span><span class="unit">°C</span></div>
+                    <div class="update-ts" id="temp-time">Last Update: --:--</div>
+                </div>
+                <svg class="circle-svg">
+                    <circle class="circle-bg" cx="40" cy="40" r="36"></circle>
+                    <circle id="temp-ring" class="circle-progress" cx="40" cy="40" r="36" stroke="var(--warning)">
+                    </circle>
+                </svg>
+            </div>
+        </div>
+
+        <!-- Humidity Card -->
+        <div class="glass-card">
+            <div class="card-label">
+                <i class="bi bi-droplet-fill" style="color: var(--primary);"></i>
+                HUMIDITY
+            </div>
+            <div class="metric-content">
+                <div class="value-group">
+                    <div class="main-value"><span id="hum-val">--</span><span class="unit">%</span></div>
+                    <div class="update-ts" id="hum-time">Last Update: --:--</div>
+                </div>
+                <svg class="circle-svg">
+                    <circle class="circle-bg" cx="40" cy="40" r="36"></circle>
+                    <circle id="hum-ring" class="circle-progress" cx="40" cy="40" r="36" stroke="var(--primary)">
+                    </circle>
+                </svg>
+            </div>
+        </div>
+
+        <!-- Control Card -->
+        <div class="glass-card">
+            <div class="card-label">
+                <i class="bi bi-lightning-charge-fill" style="color: var(--secondary);"></i>
+                LED CONTROL
+            </div>
+            <div class="controls">
+                <button id="btn-on" class="btn-toggle">
+                    <i class="bi bi-power"></i>
+                    ON
+                </button>
+                <button id="btn-off" class="btn-toggle">
+                    <i class="bi bi-slash-circle"></i>
+                    OFF
+                </button>
+            </div>
+            <p style="text-align: center; margin-top: 1rem; font-size: 0.8rem; color: var(--text-dim);">
+                Status: <span id="led-status" style="color: white; font-weight: 600;">UNKNOWN</span>
+            </p>
+        </div>
+
+        <!-- Chart Card -->
+        <div class="glass-card full-width">
+            <div class="card-label">
+                <i class="bi bi-graph-up"></i>
+                REAL-TIME ANALYTICS
+            </div>
+            <div class="chart-container">
+                <canvas id="realtimeChart"></canvas>
+            </div>
+        </div>
+    </main>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+        // CONFIG
+        const MQTT_CONFIG = {
+            host: "157.173.101.159",
+            port: 9001,
+            clientId: "web_gui_" + Math.random().toString(16).slice(2, 10),
+            topics: {
+                data: "sensors/dht",
+                cmd: "control/led",
+                state: "control/led/status"
+            }
+        };
+
+        // Initialize MQTT
+        const client = new Paho.MQTT.Client(MQTT_CONFIG.host, MQTT_CONFIG.port, MQTT_CONFIG.clientId);
+
+        // UI Elements
+        const ui = {
+            temp: document.getElementById('temp-val'),
+            hum: document.getElementById('hum-val'),
+            tempTime: document.getElementById('temp-time'),
+            humTime: document.getElementById('hum-time'),
+            tempRing: document.getElementById('temp-ring'),
+            humRing: document.getElementById('hum-ring'),
+            ledStatus: document.getElementById('led-status'),
+            statusPill: document.getElementById('status-pill'),
+            connText: document.getElementById('conn-text'),
+            btnOn: document.getElementById('btn-on'),
+            btnOff: document.getElementById('btn-off')
+        };
+
+        // Chart Initialization
+        const ctx = document.getElementById('realtimeChart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'line',
+            plugins: [ChartStreaming],
+            data: {
+                datasets: [
+                    {
+                        label: 'Temperature (°C)',
+                        borderColor: '#f59e0b',
+                        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        data: []
+                    },
+                    {
+                        label: 'Humidity (%)',
+                        borderColor: '#0ea5e9',
+                        backgroundColor: 'rgba(14, 165, 233, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        data: []
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        type: 'realtime',
+                        realtime: { duration: 60000, refresh: 1000, delay: 2000 },
+                        grid: { color: 'rgba(255,255,255,0.05)' },
+                        ticks: { color: '#94a3b8' }
+                    },
+                    y: {
+                        grid: { color: 'rgba(255,255,255,0.05)' },
+                        ticks: { color: '#94a3b8' }
+                    }
+                },
+                plugins: {
+                    legend: { labels: { color: '#f8fafc', font: { family: 'Outfit' } } }
+                }
+            }
+        });
+
+        // Helper Functions
+        const updateRing = (el, val, max) => {
+            const circle = 2 * Math.PI * 36;
+            const offset = circle - (Math.min(val, max) / max) * circle;
+            el.style.strokeDashoffset = offset;
+        };
+
+        const showToast = (msg) => {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.style.display = 'block';
+            setTimeout(() => t.style.display = 'none', 3000);
+        };
+
+        // MQTT Handlers
+        client.onConnectionLost = (err) => {
+            ui.statusPill.classList.remove('connected');
+            ui.connText.textContent = "Reconnecting...";
+            console.error(err);
+        };
+
+        client.onMessageArrived = (msg) => {
+            const topic = msg.destinationName;
+            const payload = msg.payloadString;
+
+            try {
+                if (topic === MQTT_CONFIG.topics.data) {
+                    const data = JSON.parse(payload);
+                    const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                    if (data.temperature !== undefined) {
+                        ui.temp.textContent = data.temperature.toFixed(1);
+                        ui.tempTime.textContent = "Last Update: " + now;
+                        updateRing(ui.tempRing, data.temperature, 50); // Assumes max 50C
+                        chart.data.datasets[0].data.push({ x: Date.now(), y: data.temperature });
+                    }
+
+                    if (data.humidity !== undefined) {
+                        ui.hum.textContent = data.humidity.toFixed(0);
+                        ui.humTime.textContent = "Last Update: " + now;
+                        updateRing(ui.humRing, data.humidity, 100);
+                        chart.data.datasets[1].data.push({ x: Date.now(), y: data.humidity });
+                    }
+                } else if (topic === MQTT_CONFIG.topics.state) {
+                    const state = payload.toUpperCase();
+                    ui.ledStatus.textContent = state;
+                    if (state === 'ON') {
+                        ui.btnOn.classList.add('active-on');
+                        ui.btnOff.classList.remove('active-off');
+                    } else {
+                        ui.btnOff.classList.add('active-off');
+                        ui.btnOn.classList.remove('active-on');
+                    }
+                }
+            } catch (e) { console.error("Parse Error", e); }
+        };
+
+        // Connect
+        client.connect({
+            onSuccess: () => {
+                ui.statusPill.classList.add('connected');
+                ui.connText.textContent = "System Live";
+                client.subscribe(MQTT_CONFIG.topics.data);
+                client.subscribe(MQTT_CONFIG.topics.state);
+                showToast("MQTT Connected Successfully");
+            },
+            onFailure: (err) => {
+                ui.connText.textContent = "Connect Failed";
+                showToast("Connection Error: " + err.errorMessage);
+            },
+            useSSL: false
+        });
+
+        // Button Listeners
+        ui.btnOn.onclick = () => {
+            const msg = new Paho.MQTT.Message("ON");
+            msg.destinationName = MQTT_CONFIG.topics.cmd;
+            client.send(msg);
+        };
+
+        ui.btnOff.onclick = () => {
+            const msg = new Paho.MQTT.Message("OFF");
+            msg.destinationName = MQTT_CONFIG.topics.cmd;
+            client.send(msg);
+        };
+
+    </script>
+</body>
+
+</html>
